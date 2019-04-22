@@ -14,8 +14,8 @@
    the 0.8 Ah lead-acid battery should last for a year of casual use.
 
    Major components:
-   - a waterproof 6" x 3.5" x 2.3" project box
-       https://smile.amazon.com/dp/B071FKFLKZ
+   - a waterproof 4.7" x 4.7" x 3.2" project box with a clear lid
+       https://www.mouser.com/ProductDetail/546-1554P2GYCL
    - a big (2") diameter pushbutton with light
        https://smile.amazon.com/gp/product/B01M7PNCO9
    - two 1" super bright red 7-segment LCD digit displays (Kingbright SA10-21SRWA)
@@ -162,7 +162,7 @@ void write_lapcount(void) {
 void check_battery(void) {
 #define LOWBAT 10*1000  // low battery warning level in millivolts
 #define AREF_MV  3300   // analog reference voltage, in millivolts
-#define R_TOP  (205*3)  // voltage divider top resistor, in Kohms
+#define R_TOP  680      // voltage divider top resistor, in Kohms
 #define R_BOT  205      // voltage divider bottom resistor, in Kohms
    uint16_t aval = analogRead(BATTERY); // 0..1023
    // aval = (V *(BOT/(TOP+BOT) / AREF) * 1024; solve for V in millivolts

@@ -12,8 +12,8 @@
    the 0.8 Ah lead-acid battery should last for a year of casual use.
 
    Major components:
-   - a waterproof 6" x 3.5" x 2.3" project box
-       https://smile.amazon.com/dp/B071FKFLKZ
+ - a waterproof 4.7" x 4.7" x 3.2" project box with a clear lid
+       https://www.mouser.com/ProductDetail/546-1554P2GYCL
    - a big (2") diameter pushbutton with light
        https://smile.amazon.com/gp/product/B01M7PNCO9
    - two 1" super bright red 7-segment LCD digit displays (Kingbright SA10-21SRWA)
@@ -24,3 +24,4 @@
    - miscellaneous transistors, capacitors, resistors, and connectors
 
 L. Shustek, February 2019
+Updated April 21, 2019 for printed circuit board version
