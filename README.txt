@@ -7,6 +7,7 @@
 
    When you hit the button, the display shows the new lap count for 3 seconds, then goes dark.
    To reset the count to zero, press the button while the count is displayed.
+   To show the battery charge percent, press and hold the button.
    
    The circuit is designed to maximize the time between battery charging.  One charge of
    the 0.8 Ah lead-acid battery should last for a year of casual use.
@@ -25,3 +26,4 @@
 
 L. Shustek, February 2019
 Updated April 21, 2019 for printed circuit board version
+Updated September 31, 2020 to include battery charge display and circuit tweaks

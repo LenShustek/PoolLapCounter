@@ -8,8 +8,11 @@
    you would typically set it on the edge of the pool deck.
 
    When you hit the button, the display shows the new lap count for 3 seconds, then goes dark.
-   To reset the count to zero, press the button while the count is displayed.
-   
+   To reset the count to zero, press the button again while the count is displayed.
+
+   If you hold the button for more than 1 second, it display "bA" then "xx", where "xx"
+   is the percentage of battery charge.
+
    The circuit is designed to maximize the time between battery charging.  One charge of
    the 0.8 Ah lead-acid battery should last for a year of casual use.
 
@@ -57,16 +60,20 @@
   *** CHANGE LOG ***
 
    16 Feb 2019, V1.0, L. Shustek, first version
+   20 Sep 2020, V1.1, L. Shustek, add battery charge % display
+    3 Nov 2020, V1.2, L. Shustek, increase debounce time for cheap pushbuttons
 
  ************************************************************************************************/
-#define VERSION "1.0"
-#define TEST false  // do diagnostic?
+#define VERSION "1.1"
+#define SHOW_DIGITS false  // diagnostic display of all digits?
+#define SHOW_BATT false    // diagnostic display of battery voltage?
 
 #include <Arduino.h>  // Must also use modified pins_teensy.c with no usb_init and corresponding delays.
 #include <EEPROM.h>
 
-#define DISPLAY_TIME    (3*1000UL)     // display the lap count for these msec
-#define DEBOUNCE_DELAY 25  // debounce delay in msec
+#define DISPLAY_TIME 3000UL         // display the lap count for these msec
+#define SHOW_BATTERY_TIME 1500UL    // show battery level is button pushed at least this long in msec
+#define DEBOUNCE_DELAY 100          // debounce delay in msec
 
 // Arduino pin definitions
 
@@ -79,6 +86,8 @@
 #define DISPLAY_OE 10    // active low: output enable
 #define DISPLAY_CLK 11   // rising edge: clock
 #define DISPLAY_DATA 12  // data shift input
+
+uint16_t batt_V_mv;      // battery voltage in milliovolts
 
 struct {    // what we save in non-volatile EEPROM memory
    int id;               // tag that shows we have initialized it
@@ -105,18 +114,20 @@ void display_load_digit(byte digit) {
       B11111110, // 8
       B11110110, // 9
 #define DIGIT_L 10
-      B00011100, // "L"
+      B00011100, // L
 #define DIGIT_LFTBKT 11
-      B10011100,
+      B10011100, // [
 #define DIGIT_RGTBKT 12
-      B11110000,
+      B11110000, // ]
 #define DIGIT_BLANK 13
       B00000000,
 #define DIGIT_ERR 14
       B10010010, // only horizontal segments
 #define DIGIT_A 15
-      B11101110, // "A"
-#define NUM_DIGITS 16
+      B11101110, // A
+#define DIGIT_B 16
+      B00111110, // b
+#define NUM_DIGITS 17
    };
    if (digit >= NUM_DIGITS) digit = NUM_DIGITS - 1;
    byte mask = digitmask[digit];
@@ -133,7 +144,7 @@ void display_load_2digits(byte leftdigit, byte rightdigit) {
    delayMicroseconds(5);
    digitalWrite(DISPLAY_LE, LOW); }
 
-void display_show_num(int num) {
+void display_show_num(int num) { // show one- or two-digit number
    if (num < 10)
       display_load_2digits(DIGIT_BLANK, num);
    else
@@ -160,23 +171,28 @@ void write_lapcount(void) {
       EEPROM.update(i, ((byte *)&eeprom_data)[i]); }
 
 void check_battery(void) {
-#define LOWBAT 10*1000  // low battery warning level in millivolts
+#define LOWBATWARN_MV 10000 // low battery warning level in millivolts
+#define HIGHBAT_MV 13000    // high battery charge in mV = 100%
+#define HIGHBAT_PCT 100
+#define LOWBAT_MV 8000      // low battery charge in mV = 0% (pretty arbitrary)
+#define LOWBAT_PCT 0
+
 #define AREF_MV  3300   // analog reference voltage, in millivolts
 #define R_TOP  680      // voltage divider top resistor, in Kohms
 #define R_BOT  205      // voltage divider bottom resistor, in Kohms
    uint16_t aval = analogRead(BATTERY); // 0..1023
    // aval = (V *(BOT/(TOP+BOT) / AREF) * 1024; solve for V in millivolts
-   uint16_t Vmv = ((unsigned long)aval * AREF_MV * (R_TOP + R_BOT)) / (1024UL * R_BOT);
-   if (TEST) { // show volts, then hundredths of a volt
+   batt_V_mv = ((unsigned long)aval * AREF_MV * (R_TOP + R_BOT)) / (1024UL * R_BOT);
+   if (SHOW_BATT) { // show volts, then hundredths of a volt
       delay(500);
-      display_show_num(Vmv / 1000);
+      display_show_num(batt_V_mv / 1000);
       delay(1000);
       digitalWrite(DISPLAY_OE, HIGH);
-      display_show_num((Vmv % 1000) / 10);
+      display_show_num((batt_V_mv % 1000) / 10);
       delay(1000);
       digitalWrite(DISPLAY_OE, HIGH);
-      delay(500); }
-   if (Vmv < LOWBAT) {
+      delay(1000); }
+   if (batt_V_mv < LOWBATWARN_MV) {
       display_load_2digits(DIGIT_L, 0); // "LO"
       digitalWrite(DISPLAY_OE, LOW);
       delay(1000);
@@ -186,6 +202,7 @@ void check_battery(void) {
       delay(1000); } }
 
 void setup(void) {
+   unsigned long start_time;
    pinMode(POWER_ON, OUTPUT);     // turn on the MOSFET as quickly as possible
    digitalWrite(POWER_ON, HIGH);  // to keep power on
    // To allow a short button push to get things started, we use a modified version of
@@ -202,7 +219,7 @@ void setup(void) {
    pinMode(DISPLAY_DATA, OUTPUT);
    delay(DEBOUNCE_DELAY); // get beyond push bounces
 
-   if (TEST) {
+   if (SHOW_DIGITS) {
       for (byte i = 0; i < 3; ++i) {
          delay(250);
          digitalWrite(BUTTON_LED, LOW); // flash the button's light
@@ -213,16 +230,32 @@ void setup(void) {
          digitalWrite(DISPLAY_OE, LOW);
          delay(500);
          digitalWrite(DISPLAY_OE, HIGH);
-         delay(100); } }
+         delay(100); }
+      delay(1000); }
 
-   check_battery();         // warn if  low battery
+   check_battery();         // warn if low battery
    read_lapcount();
    ++eeprom_data.lapcount;  // increment and display the lapcount
    display_show_num(eeprom_data.lapcount);
-   while (digitalRead(BUTTON_PUSHED) == LOW) ; // wait for button to be released
+
+   start_time = millis();
+   while (digitalRead(BUTTON_PUSHED) == LOW) { // wait for button to be released
+      if (millis() - start_time > SHOW_BATTERY_TIME) { // but if it's held for a long time
+         int batt_percent =                           // then show battery percent charged
+            (((int)batt_V_mv - LOWBAT_MV) * (HIGHBAT_PCT - LOWBAT_PCT)) / (HIGHBAT_MV - LOWBAT_MV) + LOWBAT_PCT;
+         if (batt_percent < 0) batt_percent = 0;
+         if (batt_percent >= 100) batt_percent = 99;
+         digitalWrite(DISPLAY_OE, HIGH); // turn off briefly
+         delay(500);
+         display_load_2digits(DIGIT_B, DIGIT_A); // "bA"
+         digitalWrite(DISPLAY_OE, LOW);
+         delay(1000);
+         display_show_num(batt_percent);
+         while (digitalRead(BUTTON_PUSHED) == LOW ); // now really wait for release
+      } }
    delay(DEBOUNCE_DELAY);
 
-   unsigned long start_time = millis();
+   start_time = millis();
    while (millis() < start_time + DISPLAY_TIME) { // wait until display expiration time
       if (digitalRead(BUTTON_PUSHED) == LOW) { // if button pushed meanwhile,
          eeprom_data.lapcount = 0;  // zero the lap count
